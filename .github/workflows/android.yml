@@ -111,10 +111,7 @@ jobs:
           target: google_apis
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back emulated -camera-front emulated
-          script: |
-            trap 'adb pull /sdcard/Pictures/Omni-Camera-UI ui-screenshots || true; adb logcat -d -s AndroidRuntime:E > ui-screenshots-runtime.txt' EXIT
-            ./gradlew connectedDebugAndroidTest --no-daemon --max-workers=2
-            adb pull /sdcard/Pictures/Omni-Camera-UI ui-screenshots
+          script: ./scripts/verify-device.sh
       - uses: actions/upload-artifact@v4
         if: always()
         with:
