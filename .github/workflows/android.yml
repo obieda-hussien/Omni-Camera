@@ -20,6 +20,9 @@ jobs:
           distribution: temurin
           java-version: '17'
       - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+          log-accepted-android-sdk-licenses: false
       - uses: gradle/actions/setup-gradle@v4
       - name: Install SDK
         run: sdkmanager 'platforms;android-36' 'build-tools;35.0.0'
@@ -52,7 +55,8 @@ jobs:
       - name: Verify and build optimized release
         run: ./gradlew testDebugUnitTest lintDebug assembleRelease bundleRelease --no-daemon --max-workers=4
       - name: Verify APK signature
-        run: "$ANDROID_HOME/build-tools/35.0.0/apksigner verify --verbose app/build/outputs/apk/release/app-release.apk"
+        run: |
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose app/build/outputs/apk/release/app-release.apk
       - uses: actions/upload-artifact@v4
         with:
           name: Omni-Camera-0.1.0-${{ env.BUILD_SIGNING }}-APK
@@ -66,6 +70,7 @@ jobs:
           compression-level: 9
           if-no-files-found: error
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: Omni-Camera-0.1.0-symbols-and-reports
           path: |
