@@ -5,7 +5,6 @@ import android.content.pm.ActivityInfo
 import android.graphics.Bitmap
 import android.content.ContentValues
 import android.provider.MediaStore
-import androidx.annotation.RequiresApi
 import androidx.test.filters.SdkSuppress
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -22,7 +21,6 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
-@RequiresApi(29)
 @SdkSuppress(minSdkVersion = 29)
 class CameraExperienceTest {
     @get:Rule(order = 0) val permissions = GrantPermissionRule.grant(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO)
