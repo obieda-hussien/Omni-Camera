@@ -45,15 +45,20 @@ class PhotoProcessor(private val models: PortraitModels) {
     }
 
     private suspend fun fuse(base: Bitmap, bundle: CaptureBundle, quality: ProcessingQuality, mirror: Boolean): Int {
+        val burst = NativeImaging.burst(base) ?: return 0
         var accepted = 0
-        for ((file, stops) in bundle.brackets) {
+        try {
+            for ((file, stops) in bundle.brackets) {
+                coroutineContext.ensureActive()
+                val frame = decode(file, quality, mirror, base.width * base.height, true, base.width to base.height)
+                try {
+                    if (frame.width == base.width && frame.height == base.height && burst.add(frame, stops)) accepted++
+                } finally { frame.recycle() }
+            }
             coroutineContext.ensureActive()
-            val frame = decode(file, quality, mirror, base.width * base.height, true, base.width to base.height)
-            try {
-                if (frame.width == base.width && frame.height == base.height && NativeImaging.fuse(base, frame, stops)) accepted++
-            } finally { frame.recycle() }
-        }
-        return accepted
+            if (accepted > 0) burst.finish(base)
+            return accepted
+        } finally { burst.close() }
     }
 
     private suspend fun fallback(bitmap: Bitmap, analysis: PortraitAnalysis, stats: SceneStats, options: ProcessingOptions) {

@@ -9,7 +9,7 @@ An independent Android camera built with Kotlin, Jetpack Compose and CameraX. Lo
 - Native C++17 imaging engine: guided illumination mapping, face/person masks, linear-light colour-preserving shadow recovery, measured-noise adaptive denoising and bounded detail enhancement. Small lighting maps guide full-resolution pixels; transcendental functions are precomputed in lookup tables. Two background workers preserve deterministic output.
 - Manufacturer Auto/HDR/Night extensions when the selected camera supports them, with a native fallback. OEM-developed photos receive reduced additional enhancement.
 - A bounded two-photo queue releases the shutter after acquisition while development and saving continue in the background. Review opens from the gallery button; it no longer interrupts every capture.
-- Optional three-exposure JPEG HDR fusion: coarse-to-fine translation alignment, exposure-normalized motion rejection, and first-frame fallback in unreliable areas. Available in Auto Photo, subject to EV support.
+- Optional three-exposure JPEG HDR fusion: coarse-to-fine translation alignment against an immutable anchor, accumulated per-pixel linear-light weights, exposure-normalized motion rejection, and first-frame fallback in unreliable areas. Available in Auto Photo, subject to EV support.
 - Processing quality and memory budget; EXIF orientation normalization, optional mirrored selfie output, optional original file and before/after review.
 - Natural SDR, an actual GPU Flat SDR effect on both preview and recording, and HLG 10-bit when CameraX reports camera/encoder support. Resolution, requested frame rate, target bitrate and optional microphone.
 - Capability-gated ISO/shutter/manual focus and white-balance presets. RAW support is reported, but RAW capture is **not** implemented.
@@ -40,7 +40,7 @@ For production signing, supply `OMNI_KEYSTORE_PATH`, `OMNI_STORE_PASSWORD`, `OMN
 
 ## Validation
 
-Nine native regression groups cover selective face lighting, noise reduction, neutral colour/alpha/stride preservation, thread determinism, translation registration, rejected alignment and clipped-highlight fusion. `scripts/verify-native.sh` also prints a 3 MP host-only comparison against the previous per-pixel scalar maths; this is not a phone latency claim.
+Twelve native regression groups cover selective face lighting, noise reduction, neutral colour/alpha/stride preservation, thread determinism, translation registration, rejected alignment, clipped-highlight fusion, order-independent burst accumulation and temporal noise reduction. `scripts/verify-native.sh` also prints a 3 MP host-only comparison against the previous per-pixel scalar maths; this is not a phone latency claim.
 
 Kotlin unit tests cover capture queue ownership, recovery LUTs, sRGB round-trips, neutral colour/alpha preservation, face versus background metering, monotonic tone mapping, heap budgets, exposure alignment, clipped-highlight fusion and fallback boundaries. Build and lint validate integration. A separate Android 11 emulator job loads JNI, captures/develops/saves a photo, verifies that processing does not open a modal, opens review, rotates to landscape and uploads UI screenshots. Physical-device tests remain necessary for camera HAL behavior, autofocus, manual controls, ML edges, HDR colour tagging, recording orientation and thermal performance.
 

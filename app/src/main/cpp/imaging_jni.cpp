@@ -44,10 +44,30 @@ Java_com_omni_camera_imaging_NativeImaging_nativeDevelop(JNIEnv* env, jobject, j
     } catch (const std::exception& e) { error(env, e.what()); return 0; }
 }
 
-extern "C" JNIEXPORT jboolean JNICALL
-Java_com_omni_camera_imaging_NativeImaging_nativeFuse(JNIEnv* env, jobject, jobject base, jobject candidate, jfloat stops) {
+extern "C" JNIEXPORT jlong JNICALL
+Java_com_omni_camera_imaging_NativeImaging_nativeCreateBurst(JNIEnv* env, jobject, jobject base) {
     try {
-        LockedBitmap a(env, base), b(env, candidate);
-        return omni::fuse(a.image, b.image, stops, omni::registerFrame(a.image, b.image));
+        LockedBitmap a(env, base);
+        return reinterpret_cast<jlong>(new omni::Burst(a.image));
+    } catch (const std::exception& e) { error(env, e.what()); return 0; }
+}
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_omni_camera_imaging_NativeImaging_nativeAddBurst(JNIEnv* env, jobject, jlong handle, jobject candidate, jfloat stops) {
+    try {
+        if (!handle) throw std::invalid_argument("Burst is closed");
+        LockedBitmap b(env, candidate);
+        return reinterpret_cast<omni::Burst*>(handle)->add(b.image, stops);
     } catch (const std::exception& e) { error(env, e.what()); return JNI_FALSE; }
+}
+extern "C" JNIEXPORT void JNICALL
+Java_com_omni_camera_imaging_NativeImaging_nativeFinishBurst(JNIEnv* env, jobject, jlong handle, jobject destination) {
+    try {
+        if (!handle) throw std::invalid_argument("Burst is closed");
+        LockedBitmap output(env, destination);
+        reinterpret_cast<omni::Burst*>(handle)->finish(output.image);
+    } catch (const std::exception& e) { error(env, e.what()); }
+}
+extern "C" JNIEXPORT void JNICALL
+Java_com_omni_camera_imaging_NativeImaging_nativeReleaseBurst(JNIEnv*, jobject, jlong handle) {
+    delete reinterpret_cast<omni::Burst*>(handle);
 }

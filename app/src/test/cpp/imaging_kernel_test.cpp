@@ -91,7 +91,42 @@ void tests() {
     for (int y = 0; y < 80; ++y) for (int x = 0; x < 80; ++x) { highlight.gray(x, y, 255); exposure.gray(x, y, 153); }
     require(omni::fuse(highlight.image(), exposure.image(), -1.5f, {0, 0, 0}), "Valid exposure rejected");
     require(highlight.pixels[0] < 230, "Fusion must use highlight information from another exposure");
-    std::cout << "Native imaging: 9 regression groups passed\n";
+    Fixture burstBase(96, 80, 8), frameA(96, 80), frameB(96, 80);
+    for (int y = 0; y < 80; ++y) for (int x = 0; x < 96; ++x) {
+        int value = 85 + (x / 9 + y / 11) % 2 * 60;
+        burstBase.gray(x, y, value, 173);
+        frameA.gray(x, y, value + 12);
+        frameB.gray(x, y, value - 10);
+    }
+    auto forward = burstBase, reverse = burstBase;
+    copy = burstBase.pixels;
+    omni::Burst ab(forward.image()), ba(reverse.image());
+    require(ab.add(frameA.image(), 0) && ab.add(frameB.image(), 0), "Valid night frames rejected");
+    require(forward.pixels == copy, "A partially developed burst changed its immutable anchor");
+    require(ba.add(frameB.image(), 0) && ba.add(frameA.image(), 0), "Reordered night frames rejected");
+    ab.finish(forward.image()); ba.finish(reverse.image());
+    require(forward.pixels == reverse.pixels, "Night result depends on frame order");
+    for (int y = 0; y < 80; ++y) for (int x = 0; x < 96; ++x)
+        require(forward.pixels[y * forward.stride + x * 4 + 3] == 173, "Burst lost anchor alpha");
+
+    Fixture rejected = burstBase;
+    omni::Burst invalid(rejected.image());
+    require(!invalid.add(frameA.image(), 0, {0, 0, 1}), "Bad burst alignment accepted");
+    invalid.finish(rejected.image());
+    require(rejected.pixels == copy, "An entirely rejected burst must preserve the original exactly");
+
+    Fixture noiseBase(96, 80), noiseA(96, 80), noiseB(96, 80);
+    for (int y = 0; y < 80; ++y) for (int x = 0; x < 96; ++x) {
+        noiseBase.gray(x, y, 100 + static_cast<int>(random() % 13) - 6);
+        noiseA.gray(x, y, 100 + static_cast<int>(random() % 13) - 6);
+        noiseB.gray(x, y, 100 + static_cast<int>(random() % 13) - 6);
+    }
+    const float burstVariance = variance(noiseBase);
+    omni::Burst night(noiseBase.image());
+    require(night.add(noiseA.image(), 0, {0, 0, 0}) && night.add(noiseB.image(), 0, {0, 0, 0}), "Noise frames rejected");
+    night.finish(noiseBase.image());
+    require(variance(noiseBase) < burstVariance * .6f, "Three-frame night fusion should reduce temporal noise");
+    std::cout << "Native imaging: 12 regression groups passed\n";
 }
 
 void benchmark() {

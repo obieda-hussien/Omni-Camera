@@ -260,4 +260,57 @@ bool fuse(Image base, Image candidate, float stops, Registration offset) {
     }
     return true;
 }
+
+Burst::Burst(Image anchor): width_(anchor.width), height_(anchor.height) {
+    validate(anchor);
+    const size_t pixels = static_cast<size_t>(width_) * height_;
+    anchor_.resize(pixels * 4); sums_.resize(pixels);
+    const auto& t = tables();
+    for (int y = 0; y < height_; ++y) {
+        std::memcpy(anchor_.data() + static_cast<size_t>(y) * width_ * 4,
+            anchor.rgba + y * anchor.stride, static_cast<size_t>(width_) * 4);
+        for (int x = 0; x < width_; ++x) {
+            const size_t n = static_cast<size_t>(y) * width_ + x;
+            const auto* p = anchor_.data() + n * 4;
+            const float weight = t.fusionWeight[luma(p)];
+            sums_[n] = {t.linear[p[0]] * weight, t.linear[p[1]] * weight,
+                t.linear[p[2]] * weight, weight};
+        }
+    }
+}
+Image Burst::anchorImage() { return {anchor_.data(), width_, height_, width_ * 4}; }
+bool Burst::add(Image candidate, float stops) { return add(candidate, stops, registerFrame(anchorImage(), candidate)); }
+bool Burst::add(Image candidate, float stops, Registration offset) {
+    validate(candidate);
+    if (candidate.width != width_ || candidate.height != height_ || !std::isfinite(offset.error) || offset.error > .14f) return false;
+    const auto& t = tables(); const float normalization = std::exp2(clip(stops, -4.f, 4.f));
+    for (int y = 0; y < height_; ++y) for (int x = 0; x < width_; ++x) {
+        const int xx = x + offset.dx, yy = y + offset.dy;
+        if (xx < 0 || yy < 0 || xx >= width_ || yy >= height_) continue;
+        const size_t n = static_cast<size_t>(y) * width_ + x;
+        const auto* p = anchor_.data() + n * 4;
+        const auto* q = candidate.rgba + yy * candidate.stride + xx * 4;
+        const float y0 = linearLuma(p), y1 = linearLuma(q) / normalization;
+        const int lum = luma(p);
+        const float confidence = lum < 12 || lum > 242 ? 1.f : clip(1 - std::abs(y0 - y1) / (.10f + y0 * .32f));
+        const float weight = t.fusionWeight[luma(q)] * confidence * confidence;
+        auto& sum = sums_[n];
+        for (int c = 0; c < 3; ++c) sum[c] += t.linear[q[c]] * weight;
+        sum[3] += weight;
+    }
+    accepted_++;
+    return true;
+}
+void Burst::finish(Image destination) {
+    validate(destination);
+    if (destination.width != width_ || destination.height != height_) throw std::invalid_argument("Burst dimensions changed");
+    if (!accepted_) return;
+    for (int y = 0; y < height_; ++y) for (int x = 0; x < width_; ++x) {
+        const size_t n = static_cast<size_t>(y) * width_ + x;
+        auto* p = destination.rgba + y * destination.stride + x * 4;
+        const auto& sum = sums_[n];
+        for (int c = 0; c < 3; ++c) p[c] = encode(sum[c] / sum[3]);
+        p[3] = anchor_[n * 4 + 3];
+    }
+}
 }

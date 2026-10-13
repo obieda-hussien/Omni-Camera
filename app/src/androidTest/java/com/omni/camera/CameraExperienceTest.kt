@@ -59,6 +59,34 @@ class CameraExperienceTest {
         } catch (e: Throwable) { resolver.delete(uri, null, null); throw e }
         finally { image.recycle() }
     }
+    @Test fun nativeBurstPreservesOrderAndLifetime() {
+        val width = 96; val height = 80
+        fun bitmap(delta: Int): Bitmap {
+            val pixels = IntArray(width * height) { n ->
+                val value = 85 + ((n % width) / 9 + (n / width) / 11) % 2 * 60 + delta
+                -0x1000000 or (value shl 16) or (value shl 8) or value
+            }
+            return Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888).apply {
+                setPixels(pixels, 0, width, 0, 0, width, height)
+            }
+        }
+        val forward = bitmap(0); val reverse = bitmap(0); val a = bitmap(12); val b = bitmap(-10)
+        try {
+            requireNotNull(NativeImaging.burst(forward)).use {
+                assertTrue(it.add(a, 0f)); assertTrue(it.add(b, 0f)); it.finish(forward)
+            }
+            requireNotNull(NativeImaging.burst(reverse)).use {
+                assertTrue(it.add(b, 0f)); assertTrue(it.add(a, 0f)); it.finish(reverse)
+            }
+            val first = IntArray(width * height); val second = IntArray(width * height)
+            forward.getPixels(first, 0, width, 0, 0, width, height)
+            reverse.getPixels(second, 0, width, 0, 0, width, height)
+            assertArrayEquals("JNI burst must not favor the last frame", first, second)
+            val closed = requireNotNull(NativeImaging.burst(forward))
+            closed.close(); closed.close()
+            assertFalse("Closed burst handles must not reach JNI", runCatching { closed.add(a, 0f) }.isSuccess)
+        } finally { listOf(forward, reverse, a, b).forEach { it.recycle() } }
+    }
     @Test fun captureDevelopReviewAndLandscape() {
         val vm = ViewModelProvider(compose.activity)[CameraViewModel::class.java]
         compose.waitUntil(45_000) { vm.state.value.capabilities.ready && previewStreaming() }
