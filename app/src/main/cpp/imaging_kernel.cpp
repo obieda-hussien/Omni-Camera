@@ -218,7 +218,7 @@ Registration registerFrame(Image base, Image candidate) {
     validate(base); validate(candidate);
     if (base.width != candidate.width || base.height != candidate.height) return {0, 0, 1};
     int dx = 0, dy = 0; float best = 1;
-    // Coarse-to-fine translation refinement reaches full-resolution pixel precision.
+    // Coarse-to-fine translation is estimated in thumbnails and mapped into image coordinates.
     for (int level : {96, 192, 384}) {
         auto a = thumbnail(base, level), b = thumbnail(candidate, level);
         const float sx = a.w / static_cast<float>(base.width), sy = a.h / static_cast<float>(base.height);

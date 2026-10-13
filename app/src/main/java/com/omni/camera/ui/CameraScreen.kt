@@ -41,7 +41,6 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -212,7 +211,7 @@ private fun CameraPreviewPane(state: CameraUiState, view: PreviewView, controlle
     tool: String?, close: () -> Unit, modifier: Modifier) {
     Box(modifier.background(Color.Black)) {
         Viewfinder(state, view, controller, vm, Modifier.fillMaxSize())
-        AnimatedVisibility(tool != null, enter = fadeIn(tween(140)) + slideInVertically(tween(180)) { it / 3 },
+        androidx.compose.animation.AnimatedVisibility(tool != null, enter = fadeIn(tween(140)) + slideInVertically(tween(180)) { it / 3 },
             exit = fadeOut(tween(100)) + slideOutVertically(tween(140)) { it / 3 }, modifier = Modifier.align(Alignment.BottomCenter)) {
             Surface(color = Color(0xF217181E), shape = RoundedCornerShape(22.dp),
                 modifier = Modifier.padding(12.dp).widthIn(max = 440.dp).fillMaxWidth().heightIn(max = 215.dp)
@@ -334,7 +333,7 @@ private fun Controls(state: CameraUiState, tool: String?, selectTool: (String) -
         val quickTools = if (state.settings.mode == CaptureMode.VIDEO) listOf("video", "light", "focus", "color")
             else state.settings.favoriteTools + if (state.settings.mode == CaptureMode.PRO) listOf("sensor") else emptyList()
         Box(Modifier.fillMaxWidth().height(52.dp)) {
-        AnimatedVisibility(expanded || tool != null, enter = fadeIn(tween(140)), exit = fadeOut(tween(100))) {
+        androidx.compose.animation.AnimatedVisibility(expanded || tool != null, enter = fadeIn(tween(140)), exit = fadeOut(tween(100))) {
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.SpaceEvenly) {
                 quickTools.forEach { id ->
                     Column(Modifier.widthIn(min = 60.dp).clip(RoundedCornerShape(12.dp)).clickable(enabled = !state.busy && (!state.recording || id != "video")) { selectTool(id) }
@@ -366,7 +365,7 @@ private fun Controls(state: CameraUiState, tool: String?, selectTool: (String) -
             }
         }
         Box(Modifier.height(18.dp), contentAlignment = Alignment.Center) {
-            AnimatedVisibility(state.processing > 0, enter = fadeIn(), exit = fadeOut()) {
+            androidx.compose.animation.AnimatedVisibility(state.processing > 0, enter = fadeIn(), exit = fadeOut()) {
                 Text(stringResource(stageLabel(state.stage)), fontSize = 10.sp, color = Color.White.copy(alpha = .5f))
             }
         }
