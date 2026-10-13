@@ -37,6 +37,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.*
@@ -134,7 +135,7 @@ fun CameraScreen(vm: CameraViewModel) {
         state.shutterCount, state.recording, state.stopping, state.seconds, state.lastMedia, state.lastPhoto, state.lastIsVideo) {
         state.copy(scene = SceneStats())
     }
-    Surface(color = Ink, modifier = Modifier.fillMaxSize()) {
+    Surface(color = Ink, contentColor = Color.White, modifier = Modifier.fillMaxSize()) {
         if (!permitted) {
             Column(Modifier.fillMaxSize().safeDrawingPadding().padding(32.dp), verticalArrangement = Arrangement.Center) {
                 Icon(Icons.Outlined.CameraAlt, null, tint = Accent, modifier = Modifier.size(56.dp))
@@ -238,7 +239,7 @@ private fun Viewfinder(state: CameraUiState, view: PreviewView, controller: Came
     val latest by rememberUpdatedState(state)
     LaunchedEffect(focus) { if (focus != null) { delay(2200); focus = null } }
     BoxWithConstraints(modifier.background(Color.Black)) {
-        val aspect = if (maxWidth > maxHeight) 4f / 3f else 3f / 4f
+        val aspect = if (LocalConfiguration.current.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE) 4f / 3f else 3f / 4f
         val frameWidth = minOf(maxWidth, maxHeight * aspect)
         Box(Modifier.size(frameWidth, frameWidth / aspect).align(Alignment.Center).clip(RoundedCornerShape(8.dp))) {
         Box(Modifier.fillMaxSize().pointerInput(controller) {
@@ -319,7 +320,6 @@ private fun Viewfinder(state: CameraUiState, view: PreviewView, controller: Came
 private fun Controls(state: CameraUiState, tool: String?, selectTool: (String) -> Unit, vm: CameraViewModel,
     capture: () -> Unit, flip: () -> Unit, modifier: Modifier, wide: Boolean) {
     val context = LocalContext.current
-    var expanded by rememberSaveable { mutableStateOf(false) }
     val controlsEnabled = !state.busy && !state.recording
     Column(modifier.padding(horizontal = 12.dp, vertical = 10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         if (wide) Spacer(Modifier.weight(1f))
@@ -335,21 +335,15 @@ private fun Controls(state: CameraUiState, tool: String?, selectTool: (String) -
         }
         val quickTools = if (state.settings.mode == CaptureMode.VIDEO) listOf("video", "light", "focus", "color")
             else state.settings.favoriteTools + if (state.settings.mode == CaptureMode.PRO) listOf("sensor") else emptyList()
-        Box(Modifier.fillMaxWidth().height(52.dp)) {
-        androidx.compose.animation.AnimatedVisibility(expanded || tool != null, enter = fadeIn(tween(140)), exit = fadeOut(tween(100))) {
-            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.SpaceEvenly) {
-                quickTools.forEach { id ->
-                    Column(Modifier.widthIn(min = 60.dp).clip(RoundedCornerShape(12.dp)).clickable(enabled = !state.busy && (!state.recording || id != "video")) { selectTool(id) }
-                        .padding(horizontal = 12.dp, vertical = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(toolIcon(id), stringResource(toolLabel(id)), Modifier.size(20.dp), tint = if (tool == id) Accent else Color.White.copy(alpha = .75f))
-                        Spacer(Modifier.height(4.dp)); Text(stringResource(toolLabel(id)), fontSize = 9.sp, color = if (tool == id) Accent else Color.White.copy(alpha = .55f))
-                    }
+        Row(Modifier.fillMaxWidth().height(44.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment = Alignment.CenterVertically) {
+            quickTools.forEach { id ->
+                IconToggleButton(checked = tool == id, onCheckedChange = { selectTool(id) },
+                    enabled = !state.busy && (!state.recording || id != "video"), modifier = Modifier.size(44.dp)) {
+                    Icon(toolIcon(id), stringResource(toolLabel(id)), Modifier.size(21.dp),
+                        tint = if (tool == id) Accent else Color.White.copy(alpha = .7f))
                 }
             }
-        }
-        }
-        IconButton(onClick = { expanded = !expanded }, modifier = Modifier.size(32.dp)) {
-            Icon(if (expanded) Icons.Outlined.KeyboardArrowDown else Icons.Outlined.KeyboardArrowUp, stringResource(R.string.quick_controls), Modifier.size(20.dp), tint = Color.White.copy(alpha = .55f))
         }
         Row(Modifier.fillMaxWidth().height(86.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(48.dp).clip(RoundedCornerShape(11.dp)).border(.5.dp, Color.White.copy(alpha = .18f), RoundedCornerShape(11.dp))

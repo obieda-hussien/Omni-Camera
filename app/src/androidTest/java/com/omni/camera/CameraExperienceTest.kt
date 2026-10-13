@@ -5,6 +5,9 @@ import android.content.pm.ActivityInfo
 import android.graphics.Bitmap
 import android.content.ContentValues
 import android.provider.MediaStore
+import android.view.View
+import android.view.ViewGroup
+import androidx.camera.view.PreviewView
 import androidx.test.filters.SdkSuppress
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -25,6 +28,18 @@ import org.junit.runner.RunWith
 class CameraExperienceTest {
     @get:Rule(order = 0) val permissions = GrantPermissionRule.grant(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO)
     @get:Rule(order = 1) val compose = createAndroidComposeRule<MainActivity>()
+    private fun previewStreaming(): Boolean {
+        var streaming = false
+        InstrumentationRegistry.getInstrumentation().runOnMainSync {
+            fun find(view: View): PreviewView? {
+                if (view is PreviewView) return view
+                if (view is ViewGroup) for (i in 0 until view.childCount) find(view.getChildAt(i))?.let { return it }
+                return null
+            }
+            streaming = find(compose.activity.window.decorView)?.previewStreamState?.value == PreviewView.StreamState.STREAMING
+        }
+        return streaming
+    }
     private fun screenshot(name: String) {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         // App-private external files disappear when UTP uninstalls the target. Public MediaStore
@@ -46,11 +61,13 @@ class CameraExperienceTest {
     }
     @Test fun captureDevelopReviewAndLandscape() {
         val vm = ViewModelProvider(compose.activity)[CameraViewModel::class.java]
-        compose.waitUntil(45_000) { vm.state.value.capabilities.ready }
+        compose.waitUntil(45_000) { vm.state.value.capabilities.ready && previewStreaming() }
+        compose.waitForIdle()
         assertTrue("The device must execute the native engine", NativeImaging.available)
         screenshot("01-camera-portrait")
         compose.onNodeWithContentDescription(compose.activity.getString(R.string.capture)).performClick()
         compose.waitUntil(45_000) { vm.state.value.processing == 0 && vm.state.value.lastMedia != null }
+        compose.waitForIdle()
         assertFalse(vm.state.value.busy)
         assertNotNull(vm.state.value.lastPhoto)
         assertNull("Photo development must not interrupt shooting with a modal", vm.state.value.review)
@@ -59,7 +76,7 @@ class CameraExperienceTest {
         compose.waitUntil { vm.state.value.review != null }
         compose.waitForIdle(); screenshot("03-photo-review")
         compose.runOnIdle { vm.dismissReview(); compose.activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE }
-        compose.waitUntil(30_000) { compose.activity.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE && vm.state.value.capabilities.ready }
+        compose.waitUntil(30_000) { compose.activity.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE && vm.state.value.capabilities.ready && previewStreaming() }
         compose.waitForIdle(); screenshot("04-camera-landscape")
     }
 }
