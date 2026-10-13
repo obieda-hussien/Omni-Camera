@@ -42,11 +42,11 @@
     <string name="quality_fast">Fast</string>
     <string name="quality_balanced">Balanced</string>
     <string name="quality_high">High</string>
-    <string name="quality_note">High quality uses more time and memory. Output resolution adapts to available memory.</string>
+    <string name="quality_note">Quality balances detail, processing time and memory. Your shutter stays available while photos develop.</string>
     <string name="keep_original">Save original as well</string>
     <string name="mirror_selfie">Mirror saved selfies</string>
     <string name="hdr_fusion">Multi-frame HDR</string>
-    <string name="hdr_note">Three exposures when supported. Hold steady. Moving areas favor the first frame.</string>
+    <string name="hdr_note">Uses device HDR when available, otherwise aligned exposures when the scene is steady.</string>
     <string name="grid">Composition grid</string>
     <string name="histogram">Live histogram</string>
     <string name="favorite_tools">Your quick controls</string>
@@ -56,7 +56,7 @@
     <string name="sdr">Natural SDR</string>
     <string name="flat">Flat SDR</string>
     <string name="hlg">HDR · HLG 10-bit</string>
-    <string name="log_note">Flat SDR reduces contrast for editing. It is not sensor Log. HDR is offered only when the camera and encoder support it.</string>
+    <string name="log_note">Flat SDR lowers contrast for grading. HLG records 10-bit HDR when supported.</string>
     <string name="log_unavailable">Sensor Log is not exposed through this capture pipeline.</string>
     <string name="resolution">Resolution</string>
     <string name="frame_rate">Frame rate</string>
@@ -93,4 +93,13 @@
     <string name="preview_note">Light and detail controls apply to the saved photo. Compare the result after capture.</string>
     <string name="recording_time">Recording %1$s</string>
     <string name="memory_low">Not enough memory for this photo. Try Fast processing quality.</string>
+    <string name="night">Night</string>
+    <string name="quick_controls">Quick controls</string>
+    <string name="device_processing">Device capture</string>
+    <string name="processing_decode">Preparing photo…</string>
+    <string name="processing_align">Aligning frames…</string>
+    <string name="processing_portrait">Reading the light…</string>
+    <string name="processing_develop">Developing in the background…</string>
+    <string name="processing_save">Saving photo…</string>
+    <string name="processing_recovered">Original saved. Enhancement could not finish.</string>
 </resources>

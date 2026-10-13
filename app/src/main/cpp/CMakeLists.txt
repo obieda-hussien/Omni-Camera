@@ -1,0 +1,7 @@
+cmake_minimum_required(VERSION 3.22.1)
+project(omni_imaging LANGUAGES CXX)
+add_library(omni_imaging SHARED imaging_kernel.cpp imaging_jni.cpp)
+target_compile_features(omni_imaging PRIVATE cxx_std_17)
+target_compile_options(omni_imaging PRIVATE -O3 -Wall -Wextra -fvisibility=hidden)
+target_link_options(omni_imaging PRIVATE "-Wl,-z,max-page-size=16384")
+target_link_libraries(omni_imaging android jnigraphics log)

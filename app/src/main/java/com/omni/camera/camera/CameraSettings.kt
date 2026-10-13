@@ -3,7 +3,7 @@ package com.omni.camera.camera
 import android.hardware.camera2.CaptureRequest
 import com.omni.camera.imaging.ProcessingOptions
 
-enum class CaptureMode { PHOTO, VIDEO, PRO }
+enum class CaptureMode { PHOTO, VIDEO, NIGHT, PRO }
 enum class VideoProfile { SDR, FLAT, HLG10 }
 enum class WhiteBalance(val request: Int) {
     AUTO(CaptureRequest.CONTROL_AWB_MODE_AUTO), DAYLIGHT(CaptureRequest.CONTROL_AWB_MODE_DAYLIGHT),
@@ -52,4 +52,8 @@ data class CameraCapabilities(
     val actualProfile: VideoProfile = VideoProfile.SDR,
     val actualResolution: Int = 1080,
     val actualFps: Int = 30,
+    val vendorAuto: Boolean = false,
+    val vendorHdr: Boolean = false,
+    val vendorNight: Boolean = false,
+    val activeExtension: Int = 0,
 )

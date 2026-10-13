@@ -48,6 +48,7 @@ data class SceneStats(
     val clippedFraction: Float = 0f,
     val histogram: List<Float> = List(64) { 0f },
     val faces: Int = 0,
+    val motion: Float = 0f,
 )
 
 object ImagingMath {
