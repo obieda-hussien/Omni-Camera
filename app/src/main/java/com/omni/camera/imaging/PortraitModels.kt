@@ -27,15 +27,17 @@ class PortraitModels : AutoCloseable {
     }
     private val faceDetector by lazy {
         FaceDetection.getClient(FaceDetectorOptions.Builder()
-            .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_ACCURATE).build())
+            .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_FAST)
+            .setLandmarkMode(FaceDetectorOptions.LANDMARK_MODE_NONE)
+            .setClassificationMode(FaceDetectorOptions.CLASSIFICATION_MODE_NONE).build())
     }
-    suspend fun analyze(bitmap: Bitmap): PortraitAnalysis = mutex.withLock {
+    suspend fun analyze(bitmap: Bitmap, longest: Int = 512): PortraitAnalysis = mutex.withLock {
         check(!closed)
         // ML Kit tasks cannot be cancelled. Keep the input alive until both native tasks finish.
-        withContext(NonCancellable) { analyzeLocked(bitmap) }
+        withContext(NonCancellable) { analyzeLocked(bitmap, longest) }
     }
-    private suspend fun analyzeLocked(bitmap: Bitmap): PortraitAnalysis = coroutineScope {
-        val scale = minOf(1f, 768f / maxOf(bitmap.width, bitmap.height))
+    private suspend fun analyzeLocked(bitmap: Bitmap, longest: Int): PortraitAnalysis = coroutineScope {
+        val scale = minOf(1f, longest.toFloat() / maxOf(bitmap.width, bitmap.height))
         val small = if (scale < 1f) Bitmap.createScaledBitmap(bitmap,
             (bitmap.width * scale).toInt().coerceAtLeast(1), (bitmap.height * scale).toInt().coerceAtLeast(1), true) else bitmap
         try {

@@ -42,11 +42,11 @@
     <string name="quality_fast">سريعة</string>
     <string name="quality_balanced">متوازنة</string>
     <string name="quality_high">عالية</string>
-    <string name="quality_note">الجودة العالية تحتاج وقتًا وذاكرة أكثر. دقة الصورة تتكيف مع الذاكرة المتاحة.</string>
+    <string name="quality_note">الجودة توازن التفاصيل والوقت والذاكرة. التصوير يظل متاحًا أثناء معالجة الصور.</string>
     <string name="keep_original">حفظ الأصل أيضًا</string>
     <string name="mirror_selfie">عكس صور السيلفي المحفوظة</string>
     <string name="hdr_fusion">HDR متعدد اللقطات</string>
-    <string name="hdr_note">ثلاثة تعريضات عند دعمها. ثبّت الموبايل. مناطق الحركة تعتمد أكثر على اللقطة الأولى.</string>
+    <string name="hdr_note">يستخدم HDR الجهاز إن توفر، وإلا يدمج تعريضات متعددة عند ثبات المشهد.</string>
     <string name="grid">شبكة التكوين</string>
     <string name="histogram">مخطط الإضاءة المباشر</string>
     <string name="favorite_tools">أدواتك السريعة</string>
@@ -56,7 +56,7 @@
     <string name="sdr">SDR طبيعي</string>
     <string name="flat">SDR مسطّح</string>
     <string name="hlg">HDR · HLG ‏10 بت</string>
-    <string name="log_note">SDR المسطّح يقلل التباين لتعديل الألوان، لكنه ليس Log من المستشعر. HDR يظهر عند دعم الكاميرا والترميز.</string>
+    <string name="log_note">SDR المسطّح يقلل التباين لتعديل الألوان. HLG يسجل HDR بدقة 10 بت عند دعمه.</string>
     <string name="log_unavailable">Log من المستشعر غير متاح عبر مسار التصوير الحالي.</string>
     <string name="resolution">الدقة</string>
     <string name="frame_rate">معدل الإطارات</string>
@@ -93,4 +93,13 @@
     <string name="preview_note">إعدادات الإضاءة والتفاصيل تطبق على الصورة المحفوظة. قارن النتيجة بعد التصوير.</string>
     <string name="recording_time">تسجيل %1$s</string>
     <string name="memory_low">الذاكرة غير كافية لهذه الصورة. جرّب جودة المعالجة السريعة.</string>
+    <string name="night">ليلي</string>
+    <string name="quick_controls">الأدوات السريعة</string>
+    <string name="device_processing">تصوير بمعالجة الجهاز</string>
+    <string name="processing_decode">تجهيز الصورة…</string>
+    <string name="processing_align">محاذاة اللقطات…</string>
+    <string name="processing_portrait">تحليل الإضاءة…</string>
+    <string name="processing_develop">معالجة في الخلفية…</string>
+    <string name="processing_save">حفظ الصورة…</string>
+    <string name="processing_recovered">تم حفظ الأصل. تعذّر إكمال التحسين.</string>
 </resources>

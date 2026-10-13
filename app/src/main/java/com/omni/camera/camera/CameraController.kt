@@ -23,6 +23,8 @@ import androidx.camera.camera2.interop.ExperimentalCamera2Interop
 import androidx.camera.core.*
 import androidx.camera.core.resolutionselector.*
 import androidx.camera.lifecycle.ProcessCameraProvider
+import androidx.camera.extensions.ExtensionMode
+import androidx.camera.extensions.ExtensionsManager
 import androidx.camera.video.*
 import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
@@ -44,7 +46,7 @@ import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlin.math.*
 
-data class CaptureBundle(val base: File, val brackets: List<Pair<File, Float>> = emptyList()) {
+data class CaptureBundle(val base: File, val brackets: List<Pair<File, Float>> = emptyList(), val vendorProcessed: Boolean = false) {
     fun delete() { base.delete(); brackets.forEach { it.first.delete() } }
 }
 
@@ -75,7 +77,9 @@ class CameraController(
     private var settings = CameraSettings()
     private var capabilities = CameraCapabilities()
     private var lastAnalysis = 0L
+    private var lastFaceAnalysis = 0L
     private var latestScene = SceneStats()
+    private var lastLuma: FloatArray? = null
     private var lastControls: List<Any?>? = null
     @Volatile private var disposed = false
     private val analyzing = AtomicBoolean(false)
@@ -93,6 +97,11 @@ class CameraController(
     init { owner.lifecycle.addObserver(this) }
 
     suspend fun bind(s: CameraSettings) {
+        try { bindSession(s, true) }
+        catch (e: CancellationException) { throw e }
+        catch (e: Exception) { bindSession(s, false) }
+    }
+    private suspend fun bindSession(s: CameraSettings, allowExtensions: Boolean) {
         check(ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) { "Camera permission is required" }
         val token = ++generation
         settings = s
@@ -102,8 +111,21 @@ class CameraController(
         camera?.cameraInfo?.cameraState?.removeObservers(owner)
         if (useCases.isNotEmpty()) p.unbind(*useCases.toTypedArray())
         effect?.close(); effect = null
-        capture = null; video = null; camera = null; lastControls = null
-        val selector = if (s.front) CameraSelector.DEFAULT_FRONT_CAMERA else CameraSelector.DEFAULT_BACK_CAMERA
+        capture = null; video = null; camera = null; lastControls = null; lastLuma = null
+        val baseSelector = if (s.front) CameraSelector.DEFAULT_FRONT_CAMERA else CameraSelector.DEFAULT_BACK_CAMERA
+        val extensions = if (allowExtensions) runCatching { ExtensionsManager.getInstanceAsync(context, p).awaitMain() }.getOrNull() else null
+        fun extensionAvailable(mode: Int) = runCatching { extensions?.isExtensionAvailable(baseSelector, mode) == true }.getOrDefault(false)
+        val vendorAuto = extensionAvailable(ExtensionMode.AUTO)
+        val vendorHdr = extensionAvailable(ExtensionMode.HDR)
+        val vendorNight = extensionAvailable(ExtensionMode.NIGHT)
+        val extensionMode = when {
+            s.mode == CaptureMode.NIGHT && vendorNight -> ExtensionMode.NIGHT
+            s.mode == CaptureMode.PHOTO && s.processing.hdr && vendorHdr -> ExtensionMode.HDR
+            s.mode == CaptureMode.PHOTO && vendorAuto -> ExtensionMode.AUTO
+            else -> ExtensionMode.NONE
+        }
+        val selector = if (extensionMode != ExtensionMode.NONE)
+            requireNotNull(extensions).getExtensionEnabledCameraSelector(baseSelector, extensionMode) else baseSelector
         val info = p.availableCameraInfos.firstOrNull { selector.filter(listOf(it)).isNotEmpty() }
             ?: throw IllegalStateException("Requested camera is unavailable")
         val videoCaps = Recorder.getVideoCapabilities(info)
@@ -119,7 +141,7 @@ class CameraController(
         val fps = s.fps.takeIf { it in rates } ?: rates.minBy { abs(it - s.fps) }
         val previewBuilder = Preview.Builder().setDynamicRange(dynamicRange)
         var reportedAt = 0L
-        Camera2Interop.Extender(previewBuilder).setSessionCaptureCallback(object : CameraCaptureSession.CaptureCallback() {
+        if (extensionMode == ExtensionMode.NONE) Camera2Interop.Extender(previewBuilder).setSessionCaptureCallback(object : CameraCaptureSession.CaptureCallback() {
             override fun onCaptureCompleted(session: CameraCaptureSession, request: CaptureRequest, result: TotalCaptureResult) {
                 val duration = result.get(CaptureResult.SENSOR_FRAME_DURATION) ?: return
                 val now = SystemClock.elapsedRealtime()
@@ -151,12 +173,24 @@ class CameraController(
                 group.addEffect(effect!!.effect)
             }
         } else {
-            capture = ImageCapture.Builder().setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
-                .setJpegQuality(100).setTargetRotation(rotation).build()
+            val captureMode = if (extensionMode != ExtensionMode.NONE || s.mode == CaptureMode.NIGHT || s.mode == CaptureMode.PRO || s.processing.hdr || s.processing.quality == ProcessingQuality.HIGH)
+                ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY else ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY
+            val builder = ImageCapture.Builder().setCaptureMode(captureMode)
+                .setJpegQuality(97).setTargetRotation(rotation)
+            if (extensionMode == ExtensionMode.NONE && (s.mode == CaptureMode.NIGHT || s.processing.quality == ProcessingQuality.HIGH)) {
+                val interop = Camera2Interop.Extender(builder)
+                if (chars.getCameraCharacteristic(CameraCharacteristics.NOISE_REDUCTION_AVAILABLE_NOISE_REDUCTION_MODES)
+                        ?.contains(CaptureRequest.NOISE_REDUCTION_MODE_HIGH_QUALITY) == true)
+                    interop.setCaptureRequestOption(CaptureRequest.NOISE_REDUCTION_MODE, CaptureRequest.NOISE_REDUCTION_MODE_HIGH_QUALITY)
+                if (chars.getCameraCharacteristic(CameraCharacteristics.EDGE_AVAILABLE_EDGE_MODES)
+                        ?.contains(CaptureRequest.EDGE_MODE_HIGH_QUALITY) == true)
+                    interop.setCaptureRequestOption(CaptureRequest.EDGE_MODE, CaptureRequest.EDGE_MODE_HIGH_QUALITY)
+            }
+            capture = builder.build()
             group.addUseCase(capture!!); active.add(capture!!)
         }
         // Some cameras cannot combine HDR video with an SDR analysis stream.
-        if (dynamicRange == DynamicRange.SDR) { group.addUseCase(analysis); active.add(analysis) }
+        if (dynamicRange == DynamicRange.SDR && extensionMode == ExtensionMode.NONE) { group.addUseCase(analysis); active.add(analysis) }
         camera = try { p.bindToLifecycle(owner, selector, group.build()) } catch (e: IllegalArgumentException) {
             p.unbind(*active.toTypedArray())
             analysis.clearAnalyzer(); active.remove(analysis)
@@ -178,15 +212,16 @@ class CameraController(
         val wb = chars.getCameraCharacteristic(CameraCharacteristics.CONTROL_AWB_AVAILABLE_MODES) ?: intArrayOf()
         capabilities = CameraCapabilities(ready = true,
             manualSensor = CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES_MANUAL_SENSOR in deviceCapabilities && iso != null && shutter != null,
-            manualFocus = minFocus > 0f, raw = CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES_RAW in deviceCapabilities,
+            manualFocus = minFocus > 0f && extensionMode == ExtensionMode.NONE, raw = CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES_RAW in deviceCapabilities,
             hlg10 = hlg, flash = c.cameraInfo.hasFlashUnit(), isoRange = (iso?.lower ?: 100)..(iso?.upper ?: 1600),
             shutterRange = (shutter?.lower ?: 1_000_000L)..minOf(shutter?.upper ?: 250_000_000L, 500_000_000L),
             focusDiopters = minFocus, minZoom = zoom?.minZoomRatio ?: 1f, maxZoom = zoom?.maxZoomRatio ?: 1f,
             exposureRange = (exposure.exposureCompensationRange.lower * step)..(exposure.exposureCompensationRange.upper * step),
-            whiteBalances = WhiteBalance.entries.filter { it.request in wb }.ifEmpty { listOf(WhiteBalance.AUTO) },
+            whiteBalances = if (extensionMode != ExtensionMode.NONE) listOf(WhiteBalance.AUTO) else WhiteBalance.entries.filter { it.request in wb }.ifEmpty { listOf(WhiteBalance.AUTO) },
             resolutions = qualities.map(::size).distinct().ifEmpty { listOf(480) }, frameRates = rates,
             actualProfile = if (s.mode == CaptureMode.VIDEO) profile else VideoProfile.SDR,
-            actualResolution = size(selected), actualFps = 0)
+            actualResolution = size(selected), actualFps = 0, vendorAuto = vendorAuto, vendorHdr = vendorHdr,
+            vendorNight = vendorNight, activeExtension = extensionMode)
         onCapabilities(capabilities)
         c.cameraInfo.cameraState.observe(owner) { state -> state.error?.let { if (token == generation) onError("Camera error ${it.code}") } }
         orientation.enable()
@@ -198,13 +233,15 @@ class CameraController(
         val c = camera ?: return
         val controls = listOf(s.zoom, s.torch, s.exposure, s.mode, s.manualSensor, s.iso, s.shutterNanos, s.focus, s.whiteBalance)
         if (controls == lastControls) return
+        val previous = lastControls
         lastControls = controls
-        c.cameraControl.setZoomRatio(s.zoom.coerceIn(capabilities.minZoom, capabilities.maxZoom))
-        if (capabilities.flash) c.cameraControl.enableTorch(s.torch)
+        if (previous == null || previous[0] != s.zoom) c.cameraControl.setZoomRatio(s.zoom.coerceIn(capabilities.minZoom, capabilities.maxZoom))
+        if (capabilities.flash && (previous == null || previous[1] != s.torch)) c.cameraControl.enableTorch(s.torch)
         val exposure = c.cameraInfo.exposureState
         val step = exposure.exposureCompensationStep.toFloat()
-        if (step > 0) c.cameraControl.setExposureCompensationIndex((s.exposure / step).roundToInt()
+        if (step > 0 && (previous == null || previous[2] != s.exposure)) c.cameraControl.setExposureCompensationIndex((s.exposure / step).roundToInt()
             .coerceIn(exposure.exposureCompensationRange.lower, exposure.exposureCompensationRange.upper))
+        if (capabilities.activeExtension != ExtensionMode.NONE || (previous != null && controls.drop(3) == previous.drop(3))) return
         val options = CaptureRequestOptions.Builder()
         if (s.mode == CaptureMode.PRO && s.manualSensor && capabilities.manualSensor) {
             options.setCaptureRequestOption(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_OFF)
@@ -235,7 +272,7 @@ class CameraController(
         val originalEv = settings.exposure
         val files = mutableListOf<File>()
         try {
-            if (settings.mode == CaptureMode.PHOTO && originalEv == 0f && latestScene.clippedFraction > 0.12f) {
+            if (capabilities.activeExtension == ExtensionMode.NONE && settings.mode == CaptureMode.PHOTO && originalEv == 0f && latestScene.clippedFraction > 0.12f) {
                 val exposure = c.cameraInfo.exposureState
                 val step = exposure.exposureCompensationStep.toFloat()
                 if (step > 0) {
@@ -246,7 +283,7 @@ class CameraController(
             }
             val base = captureFile(shot).also { files += it }
             val brackets = mutableListOf<Pair<File, Float>>()
-            if (settings.processing.hdr && settings.mode == CaptureMode.PHOTO) {
+            if (capabilities.activeExtension == ExtensionMode.NONE && settings.processing.hdr && settings.mode == CaptureMode.PHOTO && latestScene.motion < .12f) {
                 val state = c.cameraInfo.exposureState
                 val step = state.exposureCompensationStep.toFloat()
                 if (step > 0) {
@@ -264,7 +301,10 @@ class CameraController(
                     }
                 }
             }
-            return CaptureBundle(base, brackets)
+            if (capabilities.activeExtension == ExtensionMode.NONE && settings.mode == CaptureMode.NIGHT && latestScene.motion < .12f) {
+                repeat(2) { brackets += captureFile(shot).also { files += it } to 0f }
+            }
+            return CaptureBundle(base, brackets, capabilities.activeExtension != ExtensionMode.NONE)
         } catch (e: Throwable) { files.forEach { it.delete() }; throw e
         } finally { lastControls = null; update(settings.copy(exposure = originalEv)) }
     }
@@ -299,8 +339,40 @@ class CameraController(
     override fun onStart(owner: LifecycleOwner) { if (camera != null) orientation.enable() }
 
     private fun analyze(image: ImageProxy, token: Int) {
-        if (disposed || token != generation || SystemClock.elapsedRealtime() - lastAnalysis < 500 || !analyzing.compareAndSet(false, true)) { image.close(); return }
-        lastAnalysis = SystemClock.elapsedRealtime()
+        val now = SystemClock.elapsedRealtime()
+        if (disposed || token != generation || now - lastAnalysis < 200) { image.close(); return }
+        lastAnalysis = now
+        try {
+            val plane = image.planes[0]; val buffer = plane.buffer.duplicate(); val start = buffer.position()
+            val crop = image.cropRect; val samples = FloatArray(32 * 24); val bins = IntArray(64)
+            var total = 0f; var dark = 0; var clipped = 0
+            for (y in 0 until 24) for (x in 0 until 32) {
+                val sx = crop.left + (x + .5f) * crop.width() / 32
+                val sy = crop.top + (y + .5f) * crop.height() / 24
+                val index = start + sy.toInt() * plane.rowStride + sx.toInt() * plane.pixelStride
+                val value = ((buffer.get(index).toInt() and 255) - 16).coerceIn(0, 219) / 219f
+                samples[y * 32 + x] = value; bins[(value * 63).toInt()]++; total += value
+                if (value < .12f) dark++
+                if (value > .96f) clipped++
+            }
+            val average = total / samples.size
+            val previous = lastLuma
+            val oldMean = previous?.average()?.toFloat() ?: average
+            var difference = 0f
+            if (previous != null) for (i in samples.indices) difference += abs((samples[i] - average) - (previous[i] - oldMean))
+            val motion = (difference / samples.size * 3f).coerceIn(0f, 1f)
+            lastLuma = samples
+            val peak = bins.maxOrNull()?.coerceAtLeast(1) ?: 1
+            main.execute { if (!disposed && token == generation) {
+                latestScene = latestScene.copy(average = average, darkFraction = dark.toFloat() / samples.size,
+                    clippedFraction = clipped.toFloat() / samples.size, histogram = bins.map { it.toFloat() / peak }, motion = motion,
+                    subject = if (latestScene.faces > 0) latestScene.subject else average,
+                    background = if (latestScene.faces > 0) latestScene.background else average)
+                onStats(latestScene)
+            } }
+        } catch (_: Exception) { /* Keep preview independent of metering failures. */ }
+        if (now - lastFaceAnalysis < 1300 || !analyzing.compareAndSet(false, true)) { image.close(); return }
+        lastFaceAnalysis = now
         var bitmap: Bitmap? = null
         try {
             val decoded = image.toBitmap()
@@ -315,12 +387,15 @@ class CameraController(
             try {
                 val faces = withContext(NonCancellable + Dispatchers.Default) {
                     runCatching { previewFace.process(InputImage.fromBitmap(input, 0)).await() }.getOrDefault(emptyList())
-                }
-                    .map { val b = it.boundingBox; FaceRegion(b.left.toFloat() / input.width, b.top.toFloat() / input.height, b.right.toFloat() / input.width, b.bottom.toFloat() / input.height) }
+                }.map { val b = it.boundingBox; FaceRegion(b.left.toFloat() / input.width, b.top.toFloat() / input.height,
+                    b.right.toFloat() / input.width, b.bottom.toFloat() / input.height) }
                 val pixels = IntArray(input.width * input.height)
                 input.getPixels(pixels, 0, input.width, 0, 0, input.width, input.height)
                 val stats = ImagingMath.stats(pixels, input.width, input.height, null, faces)
-                main.execute { if (!disposed && token == generation) { latestScene = stats; onStats(stats) } }
+                main.execute { if (!disposed && token == generation) {
+                    latestScene = latestScene.copy(subject = stats.subject, background = stats.background, faces = stats.faces)
+                    onStats(latestScene)
+                } }
             } finally { input.recycle(); analyzing.set(false) }
         }
     }
