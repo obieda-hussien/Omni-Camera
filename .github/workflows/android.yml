@@ -85,7 +85,6 @@ jobs:
         run: rm -f "$RUNNER_TEMP/omni-signing.jks"
 
   ui-device:
-    needs: verify-and-build
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
@@ -113,13 +112,15 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back emulated -camera-front emulated
           script: |
+            trap 'adb pull /sdcard/Pictures/Omni-Camera-UI ui-screenshots || true; adb logcat -d -s AndroidRuntime:E > ui-screenshots-runtime.txt' EXIT
             ./gradlew connectedDebugAndroidTest --no-daemon --max-workers=2
-            adb pull /sdcard/Android/data/com.omni.camera/files/screenshots ui-screenshots
+            adb pull /sdcard/Pictures/Omni-Camera-UI ui-screenshots
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: Omni-Camera-0.2.0-ui-device-checks
           path: |
             ui-screenshots/
+            ui-screenshots-runtime.txt
             app/build/reports/androidTests/
           compression-level: 9

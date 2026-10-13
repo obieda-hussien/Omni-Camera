@@ -121,7 +121,7 @@ class CameraController(
         val extensionMode = when {
             s.mode == CaptureMode.NIGHT && vendorNight -> ExtensionMode.NIGHT
             s.mode == CaptureMode.PHOTO && s.processing.hdr && vendorHdr -> ExtensionMode.HDR
-            s.mode == CaptureMode.PHOTO && vendorAuto -> ExtensionMode.AUTO
+            s.mode == CaptureMode.PHOTO && !s.processing.hdr && vendorAuto -> ExtensionMode.AUTO
             else -> ExtensionMode.NONE
         }
         val selector = if (extensionMode != ExtensionMode.NONE)

@@ -115,16 +115,19 @@ fun CameraScreen(vm: CameraViewModel) {
     BackHandler(state.recording || activeTool != null) {
         if (state.recording) controller?.let(vm::stopVideo) else activeTool = null
     }
-    val capture = {
-        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-        controller?.let { c ->
-            if (s.mode == CaptureMode.VIDEO) {
-                if (state.recording) vm.stopVideo(c)
-                else if (s.microphone && !allowed(Manifest.permission.RECORD_AUDIO)) audioPermission.launch(Manifest.permission.RECORD_AUDIO)
-                else vm.startVideo(c, s.microphone)
-            } else vm.capture(c)
+    val capture: () -> Unit = remember(haptic, vm, context, audioPermission) {
+        {
+            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+            val current = vm.state.value
+            controller?.let { c ->
+                if (current.settings.mode == CaptureMode.VIDEO) {
+                    if (current.recording) vm.stopVideo(c)
+                    else if (current.settings.microphone && !allowed(Manifest.permission.RECORD_AUDIO)) audioPermission.launch(Manifest.permission.RECORD_AUDIO)
+                    else vm.startVideo(c, current.settings.microphone)
+                } else vm.capture(c)
+            }
+            Unit
         }
-        Unit
     }
     // Metering changes only invalidate the viewfinder, not all of the controls.
     val chrome = remember(s, state.capabilities, state.busy, state.processing, state.stage, state.thumbnail,
