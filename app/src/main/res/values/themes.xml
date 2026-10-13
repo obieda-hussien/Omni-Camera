@@ -1,0 +1,9 @@
+<resources>
+    <style name="Theme.OmniCamera" parent="android:style/Theme.Material.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowActionModeOverlay">true</item>
+        <item name="android:colorAccent">#B6AFFA</item>
+        <item name="android:windowBackground">#0D0E12</item>
+    </style>
+</resources>
